@@ -1,0 +1,321 @@
+Reproducible Research Course Project 1
+==========================================
+
+
+##Introduction
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the "quantified self" movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+The data for this analysis can be downloaded from the course web site:
+
+Dataset: [Activity monitoring data [52K]](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)
+
+The variables included in this dataset are:
+
+- **steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA)
+- **date**: The date on which the measurement was taken in YYYY-MM-DD format
+- **interval**: Identifier for the 5-minute interval in which measurement was taken
+
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+
+##Loading & Preprocessing Data
+
+###Loading the Data
+```{r}
+#Setting/up the working directory and reading the data
+setwd("C:/Users/ppram")
+activity <- read.csv("activity.csv")
+```
+
+
+###Processing the Data
+
+```{r}
+activity$day <- weekdays(as.Date(activity$date))
+activity$DateTime<- as.POSIXct(activity$date, format="%Y-%m-%d")
+
+##Pulling data without NAs
+clean <- activity[!is.na(activity$steps),]
+```
+
+##Question 1: What is mean total number of steps taken per day?
+
+Calculating the Total Number of Steps taken per day:
+
+```{r}
+#Summarizing total steps per date
+sumTable <- aggregate(activity$steps ~ activity$date, FUN=sum, )
+colnames(sumTable)<- c("Date", "Steps")
+```
+
+Developimng a histogram of the total number of steps taken each day:
+
+```{r}
+hist(sumTable$Steps, breaks=5, xlab="Steps", main = "Total Steps per Day")
+```
+
+Calculating and reporting the mean and median of the total number of steps taken per day:
+
+```{r}
+#Mean of Steps
+as.integer(mean(sumTable$Steps))
+
+#Median of Steps
+as.integer(median(sumTable$Steps))
+```
+
+As we can see above the The average number of steps taken each day was 10766 steps, while the median was 10765 steps.
+
+
+
+##Question 2: What is the average daily activity pattern?
+
+Making a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis):
+
+```{r}
+#Loading the appropriate liabriaries
+library(plyr)
+library(ggplot2)
+
+#Pulling data without nas
+clean <- activity[!is.na(activity$steps),]
+
+#Calculating the average number of steps per interval
+intervalTable <- ddply(clean, .(interval), summarize, Avg = mean(steps))
+
+#Developing line plot of average number of steps per interval
+p <- ggplot(intervalTable, aes(x=interval, y=Avg), xlab = "Interval", ylab="Average Number of Steps")
+p + geom_line()+xlab("Interval")+ylab("Average Number of Steps")+ggtitle("Average Number of Steps per Interval")
+```
+
+On the question of which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?, we indetified that
+
+```{r}
+maxSteps <- max(intervalTable$Avg)
+intervalTable[intervalTable$Avg==maxSteps,1]
+```
+
+the maximum number of steps for a 5-minute interval was 206 steps, while the 5-minute interval which had the maximum number of steps was the 835th interval.
+
+
+#Question 3: What about imputing missing values?
+
+First step here is to identify the total number of Missing Values (NAs) within our dataset
+
+```{r}
+nrow(activity[is.na(activity$steps),])
+```
+
+which is about 2304 missing values.
+
+We need here to devise a strategy for filling in all of the missing values in the dataset. The strategy of course does not need to be sophisticated. For example, we could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+
+My strategy in this analzsis for filling in NAs was to substitute the missing steps with the average 5-minute interval based on the day of the week.
+
+```{r}
+#Calculate the average number of steps per weekday and interval
+avgTable <- ddply(clean, .(interval, day), summarize, Avg = mean(steps))
+
+#Isolate all NAs for substitution
+nadata<- activity[is.na(activity$steps),]
+
+#Merge NA/data with the average weekday interval for substitution
+newdata<-merge(nadata, avgTable, by=c("interval", "day"))
+```
+
+As a next step we created a new dataset that is identical to the original one but with the missing values filled
+
+```{r}
+## Reorganiye the columns 
+newdata2<- newdata[,c(6,4,1,2,5)]
+colnames(newdata2)<- c("steps", "date", "interval", "day", "DateTime")
+
+##Append the rows with the filled missing values to the original data
+mergeData <- rbind(clean, newdata2)
+```
+
+To monitor the success of the previpous process of filling the missing values, we developed a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. 
+
+Final step ist identifz wether>
+
+- These values differ from the estimates from the first part of the analzsis, as well as
+- what is the impact of imputing missing data on the estimates of the total daily number of steps
+
+``` {r}
+##Create sum of steps per date to compare with step 1
+sumTable2 <- aggregate(mergeData$steps ~ mergeData$date, FUN=sum, )
+colnames(sumTable2)<- c("Date", "Steps")
+
+## Mean of Steps with NA data taken care of
+as.integer(mean(sumTable2$Steps))
+
+## Median of Steps with NA data taken care of
+as.integer(median(sumTable2$Steps))
+
+## Creating the histogram of total steps per day, categorized by data set to show impact
+hist(sumTable2$Steps, breaks=5, xlab="Steps", main = "Total Steps per Day with NAs Fixed", col="Black")
+hist(sumTable$Steps, breaks=5, xlab="Steps", main = "Total Steps per Day with NAs Fixed", col="Grey", add=T)
+legend("topright", c("Imputed Data", "Non-NA Data"), fill=c("black", "grey") )
+````
+
+From above, we observe that the new mean of the imputed data is 10821 steps, which not so different from the mean calculated at the beginning of the analysis (10766 steps). Somthing actually that we can observe from the histogram above.
+
+Hopwever, it is not the same case with the median. From the calculatin above, we observe that the new median of the imputed data is 11015 steps compared to the old median of 10765 steps. That creates a difference of 250 steps for the median.
+
+
+#Question 4: Are there differences in activity patterns between weekdays and weekends?
+
+Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day:
+
+```{r}
+mergeData$DayCategory <- ifelse(mergeData$day %in% c("Saturday", "Sunday"), "Weekend", "Weekday")
+```
+
+Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis).
+
+```{r}
+library(lattice)
+
+#Summarize data by interval and type of day
+intervalTable2 <- ddply(mergeData, .(interval, DayCategory), summarize, Avg = mean(steps))
+
+#Plot data in a panel plot
+xyplot(Avg~interval|DayCategory, data=intervalTable2, type="l",  layout = c(1,2),
+       main="Average Steps per Interval Based on Type of Day", 
+       ylab="Average Number of Steps", xlab="Interval")
+```
+
+Therefore, answering the question above: Yes, the step activity trends are different based on whether the day occurs on a weekend or not. This may be due to people having an increased opportunity for activity beyond normal work hours for those who work during the week.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
